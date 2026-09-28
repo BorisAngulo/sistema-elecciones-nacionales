@@ -72,6 +72,12 @@ psql -d elecciones_nacionales -c '\dt'
 
 Deben aparecer: `departamento`, `municipio`, `recinto`, `mesa`, `partido_politico`, `acta`, `detalle_voto_partido`, `padron_ciudadano`, `papeleta_escrutinio`.
 
+#### 4.1 Cargar datos
+
+```bash
+psql -U postgres -d elecciones_nacionales -f data.sql
+```
+
 ### 5. Ejecutar el menú de consola
 
 En IntelliJ: abre `MainConsola.java` y pulsa Run (el working directory debe ser la raíz del proyecto).
@@ -125,7 +131,7 @@ Notas:
 
 ## Qué falta realizar (trabajo de los estudiantes)
 
-```
+```text
 src/main/java/bo/edu/electoral/
 ├── config/DatabaseConnection.java       ← listo
 ├── model/                               ← listo
@@ -167,7 +173,7 @@ El `MainConsola` actual es un mantenimiento de datos. Pueden reemplazarlo o ampl
 
 ### Pruebas (opcional pero recomendado)
 
-```
+```text
 src/test/java/bo/edu/electoral/
 ├── MotorElectoralTest.java    casos de 1.ª y 2.ª vuelta
 └── EstadisticaTest.java       verificar fórmulas
