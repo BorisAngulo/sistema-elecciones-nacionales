@@ -14,13 +14,14 @@ public class DetalleVotoDAO {
 
     public int insert(DetalleVoto detalle) throws SQLException {
         String sql = "INSERT INTO detalle_voto_partido (id_acta, id_partido, votos_validos) "
-                + "VALUES (?, ?, ?) RETURNING id_detalle";
+                + "VALUES (?, ?, ?)";
         Connection cn = DatabaseConnection.getConnection();
-        try (PreparedStatement ps = cn.prepareStatement(sql)) {
+        try (PreparedStatement ps = cn.prepareStatement(sql, java.sql.Statement.RETURN_GENERATED_KEYS)) {
             ps.setInt(1, detalle.getIdActa());
             ps.setInt(2, detalle.getIdPartido());
             ps.setInt(3, detalle.getVotosValidos());
-            try (ResultSet rs = ps.executeQuery()) {
+            ps.executeUpdate();
+            try (ResultSet rs = ps.getGeneratedKeys()) {
                 if (rs.next()) {
                     int id = rs.getInt(1);
                     detalle.setIdDetalle(id);

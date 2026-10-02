@@ -15,14 +15,15 @@ public class PapeletaEscrutinioDAO {
 
     public int insert(PapeletaEscrutinio papeleta) throws SQLException {
         String sql = "INSERT INTO papeleta_escrutinio (id_mesa, orden_extraccion, tipo_voto, id_partido) "
-                + "VALUES (?, ?, ?, ?) RETURNING id_papeleta";
+                + "VALUES (?, ?, ?, ?)";
         Connection cn = DatabaseConnection.getConnection();
-        try (PreparedStatement ps = cn.prepareStatement(sql)) {
+        try (PreparedStatement ps = cn.prepareStatement(sql, java.sql.Statement.RETURN_GENERATED_KEYS)) {
             ps.setInt(1, papeleta.getIdMesa());
             ps.setInt(2, papeleta.getOrdenExtraccion());
             ps.setString(3, papeleta.getTipoVoto());
             setEnteroONulo(ps, 4, papeleta.getIdPartido());
-            try (ResultSet rs = ps.executeQuery()) {
+            ps.executeUpdate();
+            try (ResultSet rs = ps.getGeneratedKeys()) {
                 if (rs.next()) {
                     int id = rs.getInt(1);
                     papeleta.setIdPapeleta(id);

@@ -10,7 +10,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Conexión JDBC singleton hacia PostgreSQL.
+ * Conexión JDBC singleton hacia MySQL.
  * Lee las credenciales desde el archivo {@code .env} de la raíz del proyecto.
  *
  * <pre>
@@ -24,23 +24,30 @@ public class DatabaseConnection {
     private DatabaseConnection() {
     }
 
-    public static Connection getConnection() throws SQLException {
+    public static synchronized Connection getConnection() throws SQLException {
         if (connection == null || connection.isClosed()) {
+            connection = openConnection();
+        }
+        return connection;
+    }
+
+    /** Conexión independiente para una transacción de servicio. */
+    public static Connection openConnection() throws SQLException {
             Map<String, String> env = cargarEnv();
             try {
-                Class.forName("org.postgresql.Driver");
+                Class.forName("com.mysql.cj.jdbc.Driver");
             } catch (ClassNotFoundException e) {
                 throw new SQLException(
-                        "No se encontró el driver de PostgreSQL. Revisa la dependencia postgresql en pom.xml",
+                        "No se encontró el driver de MySQL. Revisa la dependencia mysql-connector-j en pom.xml",
                         e);
             }
 
             String url = env.get("DB_URL");
             if (url == null || url.isBlank()) {
                 String host = valor(env, "DB_HOST", "localhost");
-                String port = valor(env, "DB_PORT", "5432");
+                String port = valor(env, "DB_PORT", "3306");
                 String name = valor(env, "DB_NAME", "elecciones_nacionales");
-                url = "jdbc:postgresql://" + host + ":" + port + "/" + name;
+                url = "jdbc:mysql://" + host + ":" + port + "/" + name + "?characterEncoding=UTF-8&connectionTimeZone=LOCAL&sslMode=PREFERRED&allowPublicKeyRetrieval=true";
             }
 
             String user = env.get("DB_USER");
@@ -50,9 +57,7 @@ public class DatabaseConnection {
                 throw new SQLException("Falta DB_USER en el archivo .env");
             }
 
-            connection = DriverManager.getConnection(url, user, password);
-        }
-        return connection;
+            return DriverManager.getConnection(url, user, password);
     }
 
     public static void closeConnection() {
@@ -108,3 +113,4 @@ public class DatabaseConnection {
         return env;
     }
 }
+
