@@ -13,11 +13,12 @@ import java.util.List;
 public class DepartamentoDAO {
 
     public int insert(Departamento departamento) throws SQLException {
-        String sql = "INSERT INTO departamento (nombre) VALUES (?) RETURNING id_departamento";
+        String sql = "INSERT INTO departamento (nombre) VALUES (?)";
         Connection cn = DatabaseConnection.getConnection();
-        try (PreparedStatement ps = cn.prepareStatement(sql)) {
+        try (PreparedStatement ps = cn.prepareStatement(sql, java.sql.Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, departamento.getNombre());
-            try (ResultSet rs = ps.executeQuery()) {
+            ps.executeUpdate();
+            try (ResultSet rs = ps.getGeneratedKeys()) {
                 if (rs.next()) {
                     int id = rs.getInt(1);
                     departamento.setIdDepartamento(id);

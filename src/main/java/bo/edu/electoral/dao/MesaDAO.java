@@ -14,14 +14,15 @@ public class MesaDAO {
 
     public int insert(Mesa mesa) throws SQLException {
         String sql = "INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) "
-                + "VALUES (?, ?, ?, ?) RETURNING id_mesa";
+                + "VALUES (?, ?, ?, ?)";
         Connection cn = DatabaseConnection.getConnection();
-        try (PreparedStatement ps = cn.prepareStatement(sql)) {
+        try (PreparedStatement ps = cn.prepareStatement(sql, java.sql.Statement.RETURN_GENERATED_KEYS)) {
             ps.setInt(1, mesa.getNumeroMesa());
             ps.setInt(2, mesa.getIdRecinto());
             ps.setInt(3, mesa.getCantidadInscritos());
             ps.setString(4, mesa.getEstado());
-            try (ResultSet rs = ps.executeQuery()) {
+            ps.executeUpdate();
+            try (ResultSet rs = ps.getGeneratedKeys()) {
                 if (rs.next()) {
                     int id = rs.getInt(1);
                     mesa.setIdMesa(id);

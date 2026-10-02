@@ -8,7 +8,7 @@
     <artifactId>sistema-elecciones-nacionales</artifactId>
     <version>1.0-SNAPSHOT</version>
     <name>Sistema Electoral Nacional</name>
-    <description>Modelos, esquema PostgreSQL, conexión JDBC, DAOs y menú de consola. Los estudiantes implementan la lógica electoral y la interfaz definitiva.</description>
+    <description>Sistema electoral docente con validación, escrutinio, Ley 026, estadísticas y consola.</description>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
@@ -18,14 +18,31 @@
 
     <dependencies>
         <dependency>
-            <groupId>org.postgresql</groupId>
-            <artifactId>postgresql</artifactId>
-            <version>42.7.4</version>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.10.2</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <version>8.4.0</version>
         </dependency>
     </dependencies>
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration><release>21</release></configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+            </plugin>
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
@@ -37,3 +54,4 @@
         </plugins>
     </build>
 </project>
+

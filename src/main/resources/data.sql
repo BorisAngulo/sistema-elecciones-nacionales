@@ -1,3 +1,18 @@
+-- Ejecutar el archivo completo en MySQL Workbench sobre una base con schema.sql.
+-- Requiere tablas vacías; no modifica una carga existente.
+DROP PROCEDURE IF EXISTS cargar_datos_electorales;
+DELIMITER $$
+CREATE PROCEDURE cargar_datos_electorales()
+BEGIN
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        RESIGNAL;
+    END;
+    START TRANSACTION;
+    IF EXISTS(SELECT 1 FROM departamento) OR EXISTS(SELECT 1 FROM partido_politico) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='La carga requiere tablas vacías. Use una base nueva.';
+    END IF;
 INSERT INTO departamento (id_departamento, nombre) VALUES
 (1, 'La Paz'),
 (2, 'Cochabamba'),
@@ -7,11 +22,10 @@ INSERT INTO departamento (id_departamento, nombre) VALUES
 (6, 'Chuquisaca'),
 (7, 'Tarija'),
 (8, 'Beni'),
-(9, 'Pando')
-ON CONFLICT (nombre) DO NOTHING;
+(9, 'Pando');
 
--- Sincronizar la secuencia del SERIAL si se insertan IDs explícitos
-SELECT setval('departamento_id_departamento_seq', (SELECT MAX(id_departamento) FROM departamento));
+-- AUTO_INCREMENT se ajusta al insertar IDs explícitos.
+
 
 -- INSERCIÓN DE TODOS LOS MUNICIPIOS DE BOLIVIA (340)
 
@@ -600,201 +614,11 @@ INSERT INTO recinto (id_municipio, nombre) VALUES
 -- ----------------------------------------------------------------------------
 
 -- Colegio Nacional Sucre (Centro)
-INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
-(3001, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Nacional Sucre' LIMIT 1), 240, 'COMPUTADA'),
-(3002, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Nacional Sucre' LIMIT 1), 238, 'COMPUTADA'),
-(3003, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Nacional Sucre' LIMIT 1), 240, 'COMPUTADA'),
-(3004, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Nacional Sucre' LIMIT 1), 235, 'HABILITADA');
+-- Una mesa por recinto existente; las claves se obtienen de la tabla, sin búsquedas ambiguas por nombre.
+INSERT INTO mesa(numero_mesa,id_recinto,cantidad_inscritos,estado)
+SELECT ROW_NUMBER() OVER (ORDER BY id_recinto), id_recinto, 240, 'HABILITADA' FROM recinto;
 
--- Instituto Americano - Amerinst (Centro)
-INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
-(3005, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Instituto Americano (Amerinst)' LIMIT 1), 240, 'COMPUTADA'),
-(3006, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Instituto Americano (Amerinst)' LIMIT 1), 240, 'COMPUTADA'),
-(3007, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Instituto Americano (Amerinst)' LIMIT 1), 220, 'HABILITADA');
-
--- Liceo Adela Zamudio (Centro)
-INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
-(3008, (SELECT id_recinto FROM recinto WHERE nombre = 'Liceo de Señoritas Adela Zamudio' LIMIT 1), 240, 'COMPUTADA'),
-(3009, (SELECT id_recinto FROM recinto WHERE nombre = 'Liceo de Señoritas Adela Zamudio' LIMIT 1), 240, 'ANULADA'); -- Mesa con observación/anulada
-
--- UMSS - Campus Central (Facultad de Tecnología)
-INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
-(3010, (SELECT id_recinto FROM recinto WHERE nombre = 'UMSS - Campus Central (Facultad de Tecnología)' LIMIT 1), 240, 'COMPUTADA'),
-(3011, (SELECT id_recinto FROM recinto WHERE nombre = 'UMSS - Campus Central (Facultad de Tecnología)' LIMIT 1), 240, 'COMPUTADA'),
-(3012, (SELECT id_recinto FROM recinto WHERE nombre = 'UMSS - Campus Central (Facultad de Tecnología)' LIMIT 1), 240, 'COMPUTADA'),
-(3013, (SELECT id_recinto FROM recinto WHERE nombre = 'UMSS - Campus Central (Facultad de Tecnología)' LIMIT 1), 230, 'HABILITADA');
-
--- UMSS - Facultad de Ciencias Económicas
-INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
-(3014, (SELECT id_recinto FROM recinto WHERE nombre = 'UMSS - Facultad de Ciencias Económicas' LIMIT 1), 240, 'COMPUTADA'),
-(3015, (SELECT id_recinto FROM recinto WHERE nombre = 'UMSS - Facultad de Ciencias Económicas' LIMIT 1), 240, 'HABILITADA');
-
--- Colegio San Agustín (Zona Queru Queru / Cala Cala)
-INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
-(3016, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio San Agustín' LIMIT 1), 240, 'COMPUTADA'),
-(3017, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio San Agustín' LIMIT 1), 240, 'COMPUTADA');
-
--- Colegio Don Bosco (Centro)
-INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
-(3018, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Don Bosco' LIMIT 1), 240, 'COMPUTADA'),
-(3019, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Don Bosco' LIMIT 1), 239, 'HABILITADA');
-
--- U.E. 27 de Mayo (Jaihuayco - Zona Sur)
-INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
-(3020, (SELECT id_recinto FROM recinto WHERE nombre = 'Unidad Educativa 27 de Mayo (Jaihuayco)' LIMIT 1), 240, 'COMPUTADA'),
-(3021, (SELECT id_recinto FROM recinto WHERE nombre = 'Unidad Educativa 27 de Mayo (Jaihuayco)' LIMIT 1), 240, 'COMPUTADA'),
-(3022, (SELECT id_recinto FROM recinto WHERE nombre = 'Unidad Educativa 27 de Mayo (Jaihuayco)' LIMIT 1), 236, 'HABILITADA');
-
--- Colegio República de México (Villa Sebastián Pagador - Zona Sur)
-INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
-(3023, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio República de México (Villa Sebastián Pagador)' LIMIT 1), 240, 'COMPUTADA'),
-(3024, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio República de México (Villa Sebastián Pagador)' LIMIT 1), 240, 'COMPUTADA'),
-(3025, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio República de México (Villa Sebastián Pagador)' LIMIT 1), 240, 'HABILITADA');
-
--- U.E. Cobija (Zona Sud)
-INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
-(3026, (SELECT id_recinto FROM recinto WHERE nombre = 'Unidad Educativa Cobija (Zona Sud)' LIMIT 1), 240, 'COMPUTADA'),
-(3027, (SELECT id_recinto FROM recinto WHERE nombre = 'Unidad Educativa Cobija (Zona Sud)' LIMIT 1), 225, 'HABILITADA');
-
--- U.E. Coña Coña (Zona Oeste)
-INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
-(3028, (SELECT id_recinto FROM recinto WHERE nombre = 'Unidad Educativa Coña Coña' LIMIT 1), 240, 'COMPUTADA'),
-(3029, (SELECT id_recinto FROM recinto WHERE nombre = 'Unidad Educativa Coña Coña' LIMIT 1), 240, 'HABILITADA');
-
--- ----------------------------------------------------------------------------
--- B. COCHABAMBA - VALLE CENTRAL Y VALLE BAJO (Quillacollo, Sacaba, Tiquipaya, Colcapirhua, Vinto)
--- ----------------------------------------------------------------------------
-
--- Quillacollo: Colegio Calama
-INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
-(3030, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Calama' LIMIT 1), 240, 'COMPUTADA'),
-(3031, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Calama' LIMIT 1), 240, 'COMPUTADA'),
-(3032, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Calama' LIMIT 1), 238, 'HABILITADA');
-
--- Quillacollo: U.E. Darío Montaño
-INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
-(3033, (SELECT id_recinto FROM recinto WHERE nombre = 'Unidad Educativa Darío Montaño' LIMIT 1), 240, 'COMPUTADA'),
-(3034, (SELECT id_recinto FROM recinto WHERE nombre = 'Unidad Educativa Darío Montaño' LIMIT 1), 240, 'HABILITADA');
-
--- Sacaba: Colegio Germán Busch
-INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
-(3035, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Germán Busch' LIMIT 1), 240, 'COMPUTADA'),
-(3036, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Germán Busch' LIMIT 1), 240, 'COMPUTADA'),
-(3037, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Germán Busch' LIMIT 1), 240, 'HABILITADA');
-
--- Tiquipaya: Colegio San Miguel
-INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
-(3038, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio San Miguel (Tiquipaya)' LIMIT 1), 240, 'COMPUTADA'),
-(3039, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio San Miguel (Tiquipaya)' LIMIT 1), 230, 'HABILITADA');
-
--- Colcapirhua: Colegio Daniel Salamanca
-INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
-(3040, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Daniel Salamanca (Colcapirhua)' LIMIT 1), 240, 'COMPUTADA'),
-(3041, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Daniel Salamanca (Colcapirhua)' LIMIT 1), 240, 'HABILITADA');
-
--- Vinto: Colegio Nacional Vinto
-INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
-(3042, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Nacional Vinto' LIMIT 1), 240, 'COMPUTADA'),
-(3043, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Nacional Vinto' LIMIT 1), 228, 'HABILITADA');
-
--- ----------------------------------------------------------------------------
--- C. COCHABAMBA - VALLE ALTO Y TRÓPICO
--- ----------------------------------------------------------------------------
-
--- Punata: Colegio Nacional Gualberto Villarroel
-INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
-(3044, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Nacional Gualberto Villarroel (Punata)' LIMIT 1), 240, 'COMPUTADA'),
-(3045, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Nacional Gualberto Villarroel (Punata)' LIMIT 1), 240, 'HABILITADA');
-
--- Cliza: Colegio Calatayud
-INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
-(3046, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Calatayud (Cliza)' LIMIT 1), 240, 'COMPUTADA'),
-(3047, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Calatayud (Cliza)' LIMIT 1), 235, 'HABILITADA');
-
--- Villa Tunari: U.E. Villa Tunari
-INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
-(3048, (SELECT id_recinto FROM recinto WHERE nombre = 'Unidad Educativa Villa Tunari' LIMIT 1), 240, 'COMPUTADA'),
-(3049, (SELECT id_recinto FROM recinto WHERE nombre = 'Unidad Educativa Villa Tunari' LIMIT 1), 240, 'COMPUTADA'),
-(3050, (SELECT id_recinto FROM recinto WHERE nombre = 'Unidad Educativa Villa Tunari' LIMIT 1), 240, 'HABILITADA');
-
--- Puerto Villarroel: Colegio Ivirgarzama
-INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
-(3051, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Ivirgarzama' LIMIT 1), 240, 'COMPUTADA'),
-(3052, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Ivirgarzama' LIMIT 1), 240, 'HABILITADA');
-
--- ----------------------------------------------------------------------------
--- D. OTROS DEPARTAMENTOS (Variedad nacional comparativa)
--- ----------------------------------------------------------------------------
-
--- La Paz (Colegio Simón Bolívar y Puerto de Mejillones)
-INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
-(1001, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Nacional Simón Bolívar' AND id_municipio IN (SELECT id_municipio FROM municipio WHERE id_departamento = 1) LIMIT 1), 240, 'COMPUTADA'),
-(1002, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Nacional Simón Bolívar' AND id_municipio IN (SELECT id_municipio FROM municipio WHERE id_departamento = 1) LIMIT 1), 240, 'HABILITADA'),
-(2001, (SELECT id_recinto FROM recinto WHERE nombre = 'Unidad Educativa Puerto de Mejillones' LIMIT 1), 240, 'COMPUTADA'),
-(2002, (SELECT id_recinto FROM recinto WHERE nombre = 'Unidad Educativa Puerto de Mejillones' LIMIT 1), 240, 'HABILITADA');
-
--- Santa Cruz (Colegio Florida y Marceliano Montero)
-INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
-(4001, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Nacional Florida' LIMIT 1), 240, 'COMPUTADA'),
-(4002, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Nacional Florida' LIMIT 1), 240, 'COMPUTADA'),
-(4003, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Nacional Florida' LIMIT 1), 240, 'HABILITADA'),
-(4004, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Marceliano Montero (Montero)' LIMIT 1), 240, 'COMPUTADA');
-
--- Oruro (Colegio Simón Bolívar - Oruro)
-INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
-(
-    5001,
-    (
-        SELECT r.id_recinto
-        FROM recinto r
-        JOIN municipio m ON r.id_municipio = m.id_municipio
-        WHERE r.nombre = 'Colegio Simón Bolívar'
-          AND m.id_departamento = 4
-        LIMIT 1
-    ),
-    240,
-    'COMPUTADA'
-),
-(
-    5002,
-    (
-        SELECT id_recinto
-        FROM recinto
-        WHERE nombre = 'Colegio Anglo Americano'
-        LIMIT 1
-    ),
-    240,
-    'HABILITADA'
-);
-
--- Potosí (Colegio Pichincha)
-INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
-(6001, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Nacional Pichincha' LIMIT 1), 240, 'COMPUTADA'),
-(6002, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Siglo XX (Llallagua)' LIMIT 1), 240, 'HABILITADA');
-
--- Chuquisaca (Colegio Junín)
-INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
-(7001, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Nacional Junín' LIMIT 1), 240, 'COMPUTADA'),
-(7002, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Sagrado Corazón' LIMIT 1), 240, 'HABILITADA');
-
--- Tarija (Colegio San Luis)
-INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
-(8001, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Nacional San Luis' LIMIT 1), 240, 'COMPUTADA'),
-(8002, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Héroes del Chaco (Yacuiba)' LIMIT 1), 240, 'HABILITADA');
-
--- Beni (Colegio 6 de Agosto)
-INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
-(9001, (SELECT id_recinto FROM recinto WHERE nombre = 'Colegio Nacional 6 de Agosto' LIMIT 1), 240, 'COMPUTADA');
-
--- Pando (U.E. Antonio Vaca Díez)
-INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
-(9501, (SELECT id_recinto FROM recinto WHERE nombre = 'Unidad Educativa Antonio Vaca Díez' LIMIT 1), 240, 'COMPUTADA');
-
-
--- ============================================================================
--- INSERCIÓN DE 5 PARTIDOS POLÍTICOS FICTICIOS
--- Diseñados con perfiles ideológicos y regionales verosímiles para Bolivia
--- ============================================================================
+-- Partidos ficticios para la práctica.
 INSERT INTO partido_politico (id_partido, sigla, nombre_completo, candidato_presidente) VALUES
 (
     1,
@@ -825,147 +649,28 @@ INSERT INTO partido_politico (id_partido, sigla, nombre_completo, candidato_pres
     'SUMA-Q',
     'Solidaridad Unida por el Medio Ambiente y Soberanía',
     'Carla Andrea Justiniano Ríos'
-)
-ON CONFLICT (sigla) DO NOTHING;
-
--- Sincronizar la secuencia de la clave primaria
-SELECT setval('partido_politico_id_partido_seq', (SELECT MAX(id_partido) FROM partido_politico));
-
-
--- Inserta 50,000 ciudadanos aleatorios con nombres, apellidos y CIs bolivianos
-INSERT INTO padron_ciudadano (ci, nombres, apellidos, id_mesa, ha_votado, hora_sufragio)
-SELECT
-    -- Genera un CI verosímil entre 3 y 9 millones con extensión de departamento
-    (FLOOR(3000000 + RANDOM() * 6500000))::BIGINT || '-' ||
-    (ARRAY['LP','CB','SC','OR','PT','CH','TJ','BN','PA'])[FLOOR(1 + RANDOM() * 9)],
-
-    -- Combina nombres frecuentes
-    (ARRAY['Juan Carlos','Carlos Ramiro','Luis Alberto','José Ernesto','Miguel Ángel',
-           'María Elena','Ana Patricia','Carla Andrea','Paola Jimena','Rosa Luz',
-           'Rodrigo Gonzalo','Fernando Javier','Álvaro Marcelo','Jhonny Grover','Wilfredo'])[FLOOR(1 + RANDOM() * 15)],
-
-    -- Combina apellidos frecuentes
-    (ARRAY['Mamani Quispe','Flores Choque','Condori Yujra','Vargas Mendoza','Fernández Ríos',
-           'Torrico Montaño','Gutiérrez Paz','Rojas Morales','Quisbert Huanca','Apaza Ticona',
-           'Camacho Arispe','Antelo Aguilera','Suárez Justiniano','Ribera Melgar','Claure Zenteno'])[FLOOR(1 + RANDOM() * 15)],
-
-    -- Asigna una mesa habilitada aleatoria
-    m.id_mesa,
-
-    -- El votante aún no sufragó
-    FALSE,
-    NULL
-FROM generate_series(1, 50000) AS s(i)
-JOIN LATERAL (
-    SELECT id_mesa
-    FROM mesa
-    WHERE estado = 'HABILITADA'
-    ORDER BY RANDOM()
-    LIMIT 1
-) m ON TRUE
-ON CONFLICT (ci) DO NOTHING;
-
-
-DO $$
-DECLARE
-    r_mesa RECORD;
-    r_ciudadano RECORD;
-    v_partidos INT[];
-    total_partidos INT;
-    v_orden INT;
-    v_prob_asistencia NUMERIC;
-    v_dado NUMERIC;
-    v_tipo_voto VARCHAR(20);
-    v_id_partido INT;
-    v_hora_voto TIMESTAMP;
-BEGIN
-    -- 1. Cargar las IDs de los partidos políticos disponibles
-    SELECT ARRAY_AGG(id_partido) INTO v_partidos FROM partido_politico;
-    total_partidos := ARRAY_LENGTH(v_partidos, 1);
-
-    IF total_partidos IS NULL OR total_partidos = 0 THEN
-        RAISE EXCEPTION 'No hay partidos políticos en la tabla partido_politico.';
-    END IF;
-
-    -- 2. Recorrer cada mesa habilitada
-    FOR r_mesa IN (SELECT id_mesa FROM mesa WHERE estado = 'HABILITADA') LOOP
-        v_orden := 0;
-
-        -- Recorrer los ciudadanos inscritos en esta mesa
-        FOR r_ciudadano IN (
-            SELECT ci
-            FROM padron_ciudadano
-            WHERE id_mesa = r_mesa.id_mesa
-            ORDER BY ci
-        ) LOOP
-            -- Asistencia electoral verosímil: ~88% de probabilidad de acudir a votar
-            v_prob_asistencia := RANDOM();
-
-            IF v_prob_asistencia <= 0.88 THEN
-                v_orden := v_orden + 1;
-
-                -- Hora del sufragio distribuida entre 08:00 y 16:30 del día de votación
-                v_hora_voto := TIMESTAMP '2026-10-18 08:00:00' + (RANDOM() * INTERVAL '510 minutes');
-
-                -- A. Actualizar asistencia en el padrón nominal
-                UPDATE padron_ciudadano
-                SET ha_votado = TRUE,
-                    hora_sufragio = v_hora_voto
-                WHERE ci = r_ciudadano.ci;
-
-                -- B. Determinar el sentido del voto secreto en la papeleta
-                v_dado := RANDOM();
-
-                IF v_dado < 0.04 THEN
-                    -- 4% Probabilidad de voto en blanco
-                    v_tipo_voto := 'BLANCO';
-                    v_id_partido := NULL;
-                ELSIF v_dado < 0.09 THEN
-                    -- 5% Probabilidad de voto nulo
-                    v_tipo_voto := 'NULO';
-                    v_id_partido := NULL;
-                ELSE
-                    -- 91% Probabilidad de voto válido repartido entre los partidos
-                    v_tipo_voto := 'VALIDO';
-
-                    -- Distribución probabilística ponderada de preferencias
-                    -- (Simula tendencias electorales con pesos distintos por sigla)
-                    IF v_dado < 0.38 THEN
-                        v_id_partido := v_partidos[1];
-                    ELSIF v_dado < 0.65 THEN
-                        v_id_partido := v_partidos[2];
-                    ELSIF v_dado < 0.82 THEN
-                        v_id_partido := v_partidos[3];
-                    ELSIF v_dado < 0.94 THEN
-                        v_id_partido := v_partidos[4];
-                    ELSE
-                        v_id_partido := v_partidos[5];
-                    END IF;
-                END IF;
-
-                -- C. Registrar la papeleta extraída en el escrutinio
-                INSERT INTO papeleta_escrutinio (
-                    id_mesa,
-                    orden_extraccion,
-                    tipo_voto,
-                    id_partido,
-                    fecha_registro
-                ) VALUES (
-                    r_mesa.id_mesa,
-                    v_orden,
-                    v_tipo_voto,
-                    v_id_partido,
-                    TIMESTAMP '2026-10-18 17:00:00' + (v_orden * INTERVAL '15 seconds')
-                );
-            END IF;
-        END LOOP;
-    END LOOP;
-
-    RAISE NOTICE 'Simulación de sufragio y extracción de papeletas completada con éxito.';
-END $$;
+);
 
 
 
 
 
 
+-- Padrón determinista: exactamente cantidad_inscritos por mesa, sin votos precargados.
+-- Los CIs DEMO son ficticios y únicos; no representan personas reales.
+INSERT INTO padron_ciudadano(ci,nombres,apellidos,id_mesa,ha_votado,hora_sufragio)
+SELECT CONCAT('D',m.id_mesa,'-',n), CONCAT('Ciudadano ',n), 'Demostración', m.id_mesa, FALSE, NULL
+FROM mesa m JOIN (
+    SELECT u.n + 10*d.n + 100*c.n + 1 AS n
+    FROM (SELECT 0 n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+          UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) u
+    CROSS JOIN (SELECT 0 n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+          UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) d
+    CROSS JOIN (SELECT 0 n UNION ALL SELECT 1 UNION ALL SELECT 2) c
+) numeros ON numeros.n <= m.cantidad_inscritos;
+
+    COMMIT;
+END$$
+DELIMITER ;
+CALL cargar_datos_electorales();
+DROP PROCEDURE IF EXISTS cargar_datos_electorales;

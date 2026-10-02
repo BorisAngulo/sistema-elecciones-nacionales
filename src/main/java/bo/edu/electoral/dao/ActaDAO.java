@@ -14,14 +14,15 @@ public class ActaDAO {
 
     public int insert(Acta acta) throws SQLException {
         String sql = "INSERT INTO acta (id_mesa, votos_blancos, votos_nulos, total_ciudadanos_votaron) "
-                + "VALUES (?, ?, ?, ?) RETURNING id_acta";
+                + "VALUES (?, ?, ?, ?)";
         Connection cn = DatabaseConnection.getConnection();
-        try (PreparedStatement ps = cn.prepareStatement(sql)) {
+        try (PreparedStatement ps = cn.prepareStatement(sql, java.sql.Statement.RETURN_GENERATED_KEYS)) {
             ps.setInt(1, acta.getIdMesa());
             ps.setInt(2, acta.getVotosBlancos());
             ps.setInt(3, acta.getVotosNulos());
             ps.setInt(4, acta.getTotalCiudadanosVotaron());
-            try (ResultSet rs = ps.executeQuery()) {
+            ps.executeUpdate();
+            try (ResultSet rs = ps.getGeneratedKeys()) {
                 if (rs.next()) {
                     int id = rs.getInt(1);
                     acta.setIdActa(id);

@@ -14,13 +14,14 @@ public class PartidoPoliticoDAO {
 
     public int insert(PartidoPolitico partido) throws SQLException {
         String sql = "INSERT INTO partido_politico (sigla, nombre_completo, candidato_presidente) "
-                + "VALUES (?, ?, ?) RETURNING id_partido";
+                + "VALUES (?, ?, ?)";
         Connection cn = DatabaseConnection.getConnection();
-        try (PreparedStatement ps = cn.prepareStatement(sql)) {
+        try (PreparedStatement ps = cn.prepareStatement(sql, java.sql.Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, partido.getSigla());
             ps.setString(2, partido.getNombreCompleto());
             ps.setString(3, partido.getCandidatoPresidente());
-            try (ResultSet rs = ps.executeQuery()) {
+            ps.executeUpdate();
+            try (ResultSet rs = ps.getGeneratedKeys()) {
                 if (rs.next()) {
                     int id = rs.getInt(1);
                     partido.setIdPartido(id);
