@@ -76,6 +76,34 @@ public class PapeletaEscrutinioDAO {
         return lista;
     }
 
+    public List<ConteoDepartamento> contarPorDepartamento() throws SQLException {
+        List<ConteoDepartamento> conteos = new ArrayList<>();
+        String sql = "SELECT d.id_departamento, d.nombre AS departamento, p.tipo_voto, p.id_partido, "
+                + "COUNT(*) AS cantidad "
+                + "FROM papeleta_escrutinio p "
+                + "JOIN mesa me ON me.id_mesa = p.id_mesa "
+                + "JOIN recinto r ON r.id_recinto = me.id_recinto "
+                + "JOIN municipio mu ON mu.id_municipio = r.id_municipio "
+                + "JOIN departamento d ON d.id_departamento = mu.id_departamento "
+                + "GROUP BY d.id_departamento, d.nombre, p.tipo_voto, p.id_partido "
+                + "ORDER BY d.id_departamento, p.tipo_voto, p.id_partido";
+        Connection cn = DatabaseConnection.getConnection();
+        try (PreparedStatement ps = cn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                int idPartido = rs.getInt("id_partido");
+                Integer idPartidoONulo = rs.wasNull() ? null : idPartido;
+                conteos.add(new ConteoDepartamento(
+                        rs.getInt("id_departamento"),
+                        rs.getString("departamento"),
+                        rs.getString("tipo_voto"),
+                        idPartidoONulo,
+                        rs.getLong("cantidad")));
+            }
+        }
+        return conteos;
+    }
+
     // Método para obtener la siguiente orden de extracción de la papeleta
     public int siguienteOrden(int idMesa) throws SQLException {
         String sql = "SELECT COALESCE(MAX(orden_extraccion), 0) + 1 FROM papeleta_escrutinio WHERE id_mesa = ?";
@@ -118,5 +146,14 @@ public class PapeletaEscrutinioDAO {
         papeleta.setIdPartido(rs.wasNull() ? null : idPartido);
         papeleta.setFechaRegistro(rs.getTimestamp("fecha_registro"));
         return papeleta;
+    }
+
+    public record ConteoDepartamento(
+            int idDepartamento,
+            String departamento,
+            String tipoVoto,
+            Integer idPartido,
+            long cantidad
+    ) {
     }
 }

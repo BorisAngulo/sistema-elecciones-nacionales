@@ -11,6 +11,11 @@ Proyecto de apoyo para Programación II. Incluye el **modelo de datos**, el **es
 | DAOs (insert, update, findById, findAll, delete) | `src/main/java/bo/edu/electoral/dao/` | Persistencia con SQL y `PreparedStatement`. |
 | Menú de consola | `src/main/java/bo/edu/electoral/ui/MainConsola.java` | Alta, baja, consulta, edición y simulación de voto. |
 | Simulación de votación | `src/main/java/bo/edu/electoral/service/SimuladorVotacionService.java` | Valida CI, registra papeleta (sin CI) y marca `ha_votado`. |
+| Cierre y escrutinio de mesa | `src/main/java/bo/edu/electoral/service/CierreMesaService.java` | Consolida papeletas en un acta y detalle por partido, y marca la mesa como computada en una transacción. |
+| Validación del acta | `src/main/java/bo/edu/electoral/service/ValidadorActaService.java` | Comprueba que votos y papeletas coincidan, que no se supere el número de inscritos y que papeletas y ciudadanos que votaron coincidan. |
+| Resultados y gráficos | `src/main/java/bo/edu/electoral/service/ResultadoSimulacionService.java` y `src/main/java/bo/edu/electoral/ui/GraficoBarrasVentana.java` | Muestra votos válidos, blancos, nulos y totales; permite filtrar el gráfico por departamento. |
+| Resultados oficiales | `src/main/java/bo/edu/electoral/service/ResultadoElectoralService.java` | Suma votos de actas por partido a nivel nacional y por departamento, con porcentajes sobre votos válidos. |
+| Resultado final presidencial | `src/main/java/bo/edu/electoral/service/ResultadoFinalService.java` | Aplica la Ley 026 al cómputo nacional para determinar ganador en primera vuelta o segunda vuelta. |
 | Esquema de base de datos | `src/main/resources/schema.sql` | Crea las tablas en PostgreSQL. |
 | Variables de entorno de ejemplo | `.env.example` | Plantilla de credenciales. Se copia a `.env`. |
 
@@ -76,8 +81,11 @@ Deben aparecer: `departamento`, `municipio`, `recinto`, `mesa`, `partido_politic
 #### 4.1 Cargar datos
 
 ```bash
-psql -U postgres -d elecciones_nacionales -f data.sql
+psql -U postgres -d elecciones_100000 -v ON_ERROR_STOP=1 -f src/main/resources/data.sql
+psql -U postgres -d elecciones_100000 -v ON_ERROR_STOP=1 -f src/main/resources/simulacion.sql
 ```
+
+Ejecuta ambos archivos una sola vez en una base vacía, después de cargar `schema.sql`: `data.sql` crea los datos base y `simulacion.sql` genera 100.000 ciudadanos distribuidos entre las mesas de los nueve departamentos y simula su asistencia y voto. No ejecutes `simulacion.sql` otra vez sobre una base que ya tenga padrón o papeletas. `-v ON_ERROR_STOP=1` detiene la carga si ocurre un error.
 
 ### 5. Ejecutar el menú de consola
 
@@ -92,6 +100,8 @@ mvn compile exec:java
 Si conecta bien verás `Conectado a PostgreSQL.` y el menú. Ahí puedes listar, buscar, crear, editar y eliminar en las 9 tablas. La opción **10. Simular votación** pide un CI, lo valida y registra el voto. La opción **11. Resultados totales** cuenta las papeletas (sin cerrar actas) y abre un gráfico de barras.
 
 El orden de carga por claves foráneas es: departamento → municipio → recinto → mesa → padrón / partidos → actas, detalles y papeletas.
+
+La opción **13. Cerrar mesa e iniciar escrutinio oficial** permite cerrar una mesa individual o todas las mesas habilitadas con papeletas. Cada cierre consolida las papeletas en un acta y sus detalles por partido, y marca la mesa como `COMPUTADA` para impedir nuevos votos; las mesas sin papeletas se informan y se omiten. La opción **12. Resultados oficiales por partido y departamento** usa esos detalles; cada porcentaje se calcula sobre los votos válidos del ámbito mostrado (nacional o departamento). La opción **14. Resultado final y conclusión electoral** muestra el informe y aplica la Ley 026 al cómputo nacional: más del 50% de los votos válidos, o al menos 40% con una ventaja mínima de 10 puntos porcentuales sobre la segunda candidatura. Si no se cumple ninguno de esos criterios, determina una segunda vuelta entre las dos candidaturas más votadas. La opción **11** sigue mostrando el conteo de papeletas de la simulación.
 
 Si falla:
 
@@ -140,7 +150,7 @@ src/main/java/bo/edu/electoral/
 │   └── ReporteElectoralDAO.java         ← FALTA (totales GROUP BY)
 ├── service/
 │   ├── SimuladorVotacionService.java    ← listo
-│   ├── ValidadorActaService.java        ← FALTA
+│   ├── ValidadorActaService.java       ← listo
 │   └── MotorElectoralLey026.java        ← FALTA
 ├── stats/                               ← FALTA
 │   ├── DistribucionFrecuencia.java
@@ -149,15 +159,15 @@ src/main/java/bo/edu/electoral/
 └── ui/MainConsola.java                  ← listo (menú de datos; no es la UI final)
 ```
 
-El menú actual solo mantiene tablas. No valida actas, no aplica la Ley 026 ni muestra resultados agregados.
+El menú actual mantiene tablas, simula votaciones, cierra mesas y muestra resultados agregados; el servicio de cierre, la validación del acta al cerrar una mesa y las reglas de la Ley 026 están implementados. Otras reglas descritas abajo siguen pendientes.
 
 ### Capa service
 
-- Validar un acta: blancos + nulos + votos válidos no deben superar inscritos; el total de papeletas debe coincidir con quienes votaron (`ha_votado`).
+- La validación del acta se ejecuta al cerrar una mesa: blancos + nulos + válidos deben coincidir con las papeletas, no superar inscritos y coincidir con la cantidad de ciudadanos marcados como votantes (`ha_votado`).
 - Un CI no puede votar dos veces.
 - No escrutar si la mesa está `ANULADA` o `COMPUTADA`.
 - El acta es 1 a 1 con la mesa.
-- **Ley 026 (presidente):** gana en primera vuelta con más del 50% de los votos válidos, o con más del 40% y 10 puntos de diferencia sobre el segundo. Si no, hay segunda vuelta.
+- **Ley 026 (presidente):** gana en primera vuelta con más del 50% de los votos válidos, o con al menos el 40% y 10 puntos porcentuales o más de diferencia sobre el segundo. La lógica está en `ResultadoFinalService`; si no se cumple ninguno de los criterios, hay segunda vuelta.
 
 ### Capa stats
 
@@ -171,7 +181,7 @@ El `MainConsola` actual es un mantenimiento de datos. Pueden reemplazarlo o ampl
 2. Escrutinio 1 a 1: registrar cada papeleta.
 3. Cierre de mesa: generar `acta` y `detalle_voto_partido`.
 4. Resultados: tabla de totales y porcentajes.
-5. Aplicar Ley 026 al cómputo nacional.
+5. La aplicación de la Ley 026 al cómputo nacional está disponible en la opción 14.
 
 ### Pruebas (opcional pero recomendado)
 

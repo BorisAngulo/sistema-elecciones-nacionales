@@ -8,7 +8,7 @@ INSERT INTO departamento (id_departamento, nombre) VALUES
 (7, 'Tarija'),
 (8, 'Beni'),
 (9, 'Pando')
-ON CONFLICT (nombre) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 -- Sincronizar la secuencia del SERIAL si se insertan IDs explícitos
 SELECT setval('departamento_id_departamento_seq', (SELECT MAX(id_departamento) FROM departamento));
@@ -748,7 +748,7 @@ INSERT INTO mesa (numero_mesa, id_recinto, cantidad_inscritos, estado) VALUES
         SELECT r.id_recinto
         FROM recinto r
         JOIN municipio m ON r.id_municipio = m.id_municipio
-        WHERE r.nombre = 'Colegio Simón Bolívar'
+        WHERE r.nombre = 'Colegio Nacional Simón Bolívar'
           AND m.id_departamento = 4
         LIMIT 1
     ),
@@ -830,142 +830,3 @@ ON CONFLICT (sigla) DO NOTHING;
 
 -- Sincronizar la secuencia de la clave primaria
 SELECT setval('partido_politico_id_partido_seq', (SELECT MAX(id_partido) FROM partido_politico));
-
-
--- Inserta 50,000 ciudadanos aleatorios con nombres, apellidos y CIs bolivianos
-INSERT INTO padron_ciudadano (ci, nombres, apellidos, id_mesa, ha_votado, hora_sufragio)
-SELECT
-    -- Genera un CI verosímil entre 3 y 9 millones con extensión de departamento
-    (FLOOR(3000000 + RANDOM() * 6500000))::BIGINT || '-' ||
-    (ARRAY['LP','CB','SC','OR','PT','CH','TJ','BN','PA'])[FLOOR(1 + RANDOM() * 9)],
-
-    -- Combina nombres frecuentes
-    (ARRAY['Juan Carlos','Carlos Ramiro','Luis Alberto','José Ernesto','Miguel Ángel',
-           'María Elena','Ana Patricia','Carla Andrea','Paola Jimena','Rosa Luz',
-           'Rodrigo Gonzalo','Fernando Javier','Álvaro Marcelo','Jhonny Grover','Wilfredo'])[FLOOR(1 + RANDOM() * 15)],
-
-    -- Combina apellidos frecuentes
-    (ARRAY['Mamani Quispe','Flores Choque','Condori Yujra','Vargas Mendoza','Fernández Ríos',
-           'Torrico Montaño','Gutiérrez Paz','Rojas Morales','Quisbert Huanca','Apaza Ticona',
-           'Camacho Arispe','Antelo Aguilera','Suárez Justiniano','Ribera Melgar','Claure Zenteno'])[FLOOR(1 + RANDOM() * 15)],
-
-    -- Asigna una mesa habilitada aleatoria
-    m.id_mesa,
-
-    -- El votante aún no sufragó
-    FALSE,
-    NULL
-FROM generate_series(1, 50000) AS s(i)
-JOIN LATERAL (
-    SELECT id_mesa
-    FROM mesa
-    WHERE estado = 'HABILITADA'
-    ORDER BY RANDOM()
-    LIMIT 1
-) m ON TRUE
-ON CONFLICT (ci) DO NOTHING;
-
-
-DO $$
-DECLARE
-    r_mesa RECORD;
-    r_ciudadano RECORD;
-    v_partidos INT[];
-    total_partidos INT;
-    v_orden INT;
-    v_prob_asistencia NUMERIC;
-    v_dado NUMERIC;
-    v_tipo_voto VARCHAR(20);
-    v_id_partido INT;
-    v_hora_voto TIMESTAMP;
-BEGIN
-    -- 1. Cargar las IDs de los partidos políticos disponibles
-    SELECT ARRAY_AGG(id_partido) INTO v_partidos FROM partido_politico;
-    total_partidos := ARRAY_LENGTH(v_partidos, 1);
-
-    IF total_partidos IS NULL OR total_partidos = 0 THEN
-        RAISE EXCEPTION 'No hay partidos políticos en la tabla partido_politico.';
-    END IF;
-
-    -- 2. Recorrer cada mesa habilitada
-    FOR r_mesa IN (SELECT id_mesa FROM mesa WHERE estado = 'HABILITADA') LOOP
-        v_orden := 0;
-
-        -- Recorrer los ciudadanos inscritos en esta mesa
-        FOR r_ciudadano IN (
-            SELECT ci
-            FROM padron_ciudadano
-            WHERE id_mesa = r_mesa.id_mesa
-            ORDER BY ci
-        ) LOOP
-            -- Asistencia electoral verosímil: ~88% de probabilidad de acudir a votar
-            v_prob_asistencia := RANDOM();
-
-            IF v_prob_asistencia <= 0.88 THEN
-                v_orden := v_orden + 1;
-
-                -- Hora del sufragio distribuida entre 08:00 y 16:30 del día de votación
-                v_hora_voto := TIMESTAMP '2026-10-18 08:00:00' + (RANDOM() * INTERVAL '510 minutes');
-
-                -- A. Actualizar asistencia en el padrón nominal
-                UPDATE padron_ciudadano
-                SET ha_votado = TRUE,
-                    hora_sufragio = v_hora_voto
-                WHERE ci = r_ciudadano.ci;
-
-                -- B. Determinar el sentido del voto secreto en la papeleta
-                v_dado := RANDOM();
-
-                IF v_dado < 0.04 THEN
-                    -- 4% Probabilidad de voto en blanco
-                    v_tipo_voto := 'BLANCO';
-                    v_id_partido := NULL;
-                ELSIF v_dado < 0.09 THEN
-                    -- 5% Probabilidad de voto nulo
-                    v_tipo_voto := 'NULO';
-                    v_id_partido := NULL;
-                ELSE
-                    -- 91% Probabilidad de voto válido repartido entre los partidos
-                    v_tipo_voto := 'VALIDO';
-
-                    -- Distribución probabilística ponderada de preferencias
-                    -- (Simula tendencias electorales con pesos distintos por sigla)
-                    IF v_dado < 0.38 THEN
-                        v_id_partido := v_partidos[1];
-                    ELSIF v_dado < 0.65 THEN
-                        v_id_partido := v_partidos[2];
-                    ELSIF v_dado < 0.82 THEN
-                        v_id_partido := v_partidos[3];
-                    ELSIF v_dado < 0.94 THEN
-                        v_id_partido := v_partidos[4];
-                    ELSE
-                        v_id_partido := v_partidos[5];
-                    END IF;
-                END IF;
-
-                -- C. Registrar la papeleta extraída en el escrutinio
-                INSERT INTO papeleta_escrutinio (
-                    id_mesa,
-                    orden_extraccion,
-                    tipo_voto,
-                    id_partido,
-                    fecha_registro
-                ) VALUES (
-                    r_mesa.id_mesa,
-                    v_orden,
-                    v_tipo_voto,
-                    v_id_partido,
-                    TIMESTAMP '2026-10-18 17:00:00' + (v_orden * INTERVAL '15 seconds')
-                );
-            END IF;
-        END LOOP;
-    END LOOP;
-
-    RAISE NOTICE 'Simulación de sufragio y extracción de papeletas completada con éxito.';
-END $$;
-
-
-
-
-
-

@@ -74,6 +74,20 @@ public class PadronCiudadanoDAO {
         return lista;
     }
 
+    public long contarVotantesPorMesa(int idMesa) throws SQLException {
+        String sql = "SELECT COUNT(*) FROM padron_ciudadano WHERE id_mesa = ? AND ha_votado = TRUE";
+        Connection cn = DatabaseConnection.getConnection();
+        try (PreparedStatement ps = cn.prepareStatement(sql)) {
+            ps.setInt(1, idMesa);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getLong(1);
+                }
+            }
+        }
+        throw new SQLException("No se pudo contar los ciudadanos que votaron en la mesa " + idMesa);
+    }
+
     public boolean delete(String ci) throws SQLException {
         String sql = "DELETE FROM padron_ciudadano WHERE ci = ?";
         Connection cn = DatabaseConnection.getConnection();

@@ -19,6 +19,9 @@ import bo.edu.electoral.model.PadronCiudadano;
 import bo.edu.electoral.model.PapeletaEscrutinio;
 import bo.edu.electoral.model.PartidoPolitico;
 import bo.edu.electoral.model.Recinto;
+import bo.edu.electoral.service.CierreMesaService;
+import bo.edu.electoral.service.ResultadoElectoralService;
+import bo.edu.electoral.service.ResultadoFinalService;
 import bo.edu.electoral.service.ResultadoSimulacionService;
 import bo.edu.electoral.service.SimuladorVotacionService;
 import bo.edu.electoral.service.VotacionException;
@@ -27,12 +30,13 @@ import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Scanner;
 
 /**
- * Menú de consola para crear, listar, editar y eliminar registros.
- * No incluye reglas electorales: eso lo implementan los estudiantes.
+ * Menú de consola para mantenimiento de datos, simulación y resultados electorales.
  */
 public class MainConsola {
 
@@ -48,6 +52,9 @@ public class MainConsola {
     private final PapeletaEscrutinioDAO papeletaDAO = new PapeletaEscrutinioDAO();
     private final SimuladorVotacionService votacionService = new SimuladorVotacionService();
     private final ResultadoSimulacionService resultadoService = new ResultadoSimulacionService();
+    private final ResultadoElectoralService resultadoElectoralService = new ResultadoElectoralService();
+    private final ResultadoFinalService resultadoFinalService = new ResultadoFinalService();
+    private final CierreMesaService cierreMesaService = new CierreMesaService();
 
     public static void main(String[] args) {
         try {
@@ -65,19 +72,28 @@ public class MainConsola {
         boolean continuar = true;
         while (continuar) {
             System.out.println();
-            System.out.println("===== SISTEMA ELECTORAL - MANTENIMIENTO DE DATOS =====");
+            System.out.println("===== SISTEMA ELECTORAL  =====");
+            System.out.println();
+            System.out.println("PREPARAR ELECCION---");
             System.out.println("1. Departamentos");
             System.out.println("2. Municipios");
             System.out.println("3. Recintos");
             System.out.println("4. Mesas");
             System.out.println("5. Partidos políticos");
             System.out.println("6. Padrón ciudadano");
-            System.out.println("7. Papeletas de escrutinio");
-            System.out.println("8. Actas");
-            System.out.println("9. Detalle de votos");
-            System.out.println("=======================================================");
-            System.out.println("10. Simular votación");
-            System.out.println("11. Resultados totales");
+            System.out.println();
+            System.out.println("SEGUIMIENTO DE ELECCION ---");
+            System.out.println("7. Simular votación");
+            System.out.println("8. Resultados de la votación (gráficos)");
+            System.out.println();
+            System.out.println("CIERRE Y RESULTADOS OFICIALES ---");
+            System.out.println("9. Cerrar mesa e iniciar escrutinio oficial");
+            System.out.println("10. Resultados oficiales por partido y departamento");
+            System.out.println("11. Resultado final y conclusión electoral (Ley 026)");
+            System.out.println();
+            System.out.println("AUDITORIA  ---");
+            System.out.println("12. Papeletas de escrutinio");
+            System.out.println("13. Actas y detalle de votos");
             System.out.println("0. Salir");
             int opcion = leerEntero("Opción: ");
             switch (opcion) {
@@ -87,11 +103,13 @@ public class MainConsola {
                 case 4 -> menuMesas();
                 case 5 -> menuPartidos();
                 case 6 -> menuPadron();
-                case 7 -> menuPapeletas();
-                case 8 -> menuActas();
-                case 9 -> menuDetalles();
-                case 10 -> simularVotacion();
-                case 11 -> mostrarResultadosTotales();
+                case 7 -> simularVotacion();
+                case 8 -> mostrarResultadosTotales();
+                case 9 -> cerrarMesa();
+                case 10 -> mostrarResultadosOficiales();
+                case 11 -> mostrarResultadosFinales();
+                case 12 -> menuPapeletas();
+                case 13, 14 -> mostrarActasYDetalleConsolidado();
                 case 0 -> continuar = false;
                 default -> System.out.println("Opción no válida.");
             }
@@ -577,6 +595,64 @@ public class MainConsola {
         }
     }
 
+    private void mostrarActasYDetalleConsolidado() {
+        System.out.println();
+        System.out.println("--- Actas y detalle de votos consolidado ---");
+        try {
+            List<Acta> actas = actaDAO.findAll();
+            List<DetalleVoto> detalles = detalleVotoDAO.findAll();
+            List<PartidoPolitico> partidos = partidoDAO.findAll();
+
+            if (actas.isEmpty()) {
+                System.out.println("No hay actas registradas.");
+                return;
+            }
+
+            ActasDetalleVentana.mostrar(actas, detalles, partidos);
+            System.out.println("Se abrió la ventana con la tabla consolidada.");
+
+            Map<Integer, Map<Integer, Integer>> votosPorActaYPartido = new HashMap<>();
+            for (DetalleVoto detalle : detalles) {
+                votosPorActaYPartido.computeIfAbsent(detalle.getIdActa(), key -> new HashMap<>())
+                        .merge(detalle.getIdPartido(), detalle.getVotosValidos(), Integer::sum);
+            }
+
+            StringBuilder encabezado = new StringBuilder();
+            encabezado.append(String.format("%-9s %-7s %-12s %-12s %-10s %-10s",
+                    "Acta", "Mesa", "Votaron", "Válidos", "Blancos", "Nulos"));
+            for (PartidoPolitico partido : partidos) {
+                encabezado.append(String.format(" %-8s", partido.getSigla()));
+            }
+            System.out.println(encabezado);
+            System.out.println("-".repeat(Math.max(encabezado.length(), 40)));
+
+            for (Acta acta : actas) {
+                Map<Integer, Integer> votosPartidos = votosPorActaYPartido.getOrDefault(acta.getIdActa(), Map.of());
+                int votosValidos = 0;
+                for (Integer votos : votosPartidos.values()) {
+                    votosValidos += votos;
+                }
+
+                StringBuilder fila = new StringBuilder();
+                fila.append(String.format("%-9d %-7d %-12d %-12d %-10d %-10d",
+                        acta.getIdActa(),
+                        acta.getIdMesa(),
+                        acta.getTotalCiudadanosVotaron(),
+                        votosValidos,
+                        acta.getVotosBlancos(),
+                        acta.getVotosNulos()));
+
+                for (PartidoPolitico partido : partidos) {
+                    int votos = votosPartidos.getOrDefault(partido.getIdPartido(), 0);
+                    fila.append(String.format(" %-8d", votos));
+                }
+                System.out.println(fila);
+            }
+        } catch (SQLException e) {
+            mostrarError(e);
+        }
+    }
+
     private void simularVotacion() {
         System.out.println();
         System.out.println("--- Simular votación ---");
@@ -631,7 +707,8 @@ public class MainConsola {
         System.out.println();
         System.out.println("--- Resultados totales ---");
         try {
-            ResultadoSimulacionService.ComputoTotal computo = resultadoService.computar();
+            ResultadoSimulacionService.InformeEstadistico informe = resultadoService.computarEstadisticas();
+            ResultadoSimulacionService.ComputoTotal computo = informe.nacional();
             if (computo.totalPapeletas() == 0) {
                 System.out.println("Aún no hay votos registrados.");
                 return;
@@ -649,10 +726,228 @@ public class MainConsola {
                     + " | Blancos: " + computo.votosBlancos()
                     + " | Nulos: " + computo.votosNulos()
                     + " | Total: " + computo.totalPapeletas());
-            GraficoBarrasVentana.mostrar(computo);
-            System.out.println("Se abrió la ventana del gráfico de barras.");
+            System.out.printf("Porcentajes sobre el total: válidos %.2f%% | blancos %.2f%% | nulos %.2f%%%n",
+                    computo.votosValidos() * 100.0 / computo.totalPapeletas(),
+                    computo.votosBlancos() * 100.0 / computo.totalPapeletas(),
+                    computo.votosNulos() * 100.0 / computo.totalPapeletas());
+            GraficoBarrasVentana.mostrar(informe);
+            System.out.println("Se abrió el gráfico. Usa el filtro para consultar cada departamento.");
         } catch (SQLException e) {
             mostrarError(e);
+        }
+    }
+
+    private void mostrarResultadosOficiales() {
+        System.out.println();
+        System.out.println("--- Resultados oficiales por partido y departamento ---");
+        try {
+            imprimirInformeElectoral(resultadoElectoralService.computar());
+        } catch (SQLException e) {
+            mostrarError(e);
+        }
+    }
+
+    private void mostrarResultadosFinales() {
+        System.out.println();
+        System.out.println("--- Resultado final de la elección presidencial ---");
+        try {
+            ResultadoFinalService.ResultadoFinal resultado = resultadoFinalService.computar();
+            imprimirInformeElectoral(resultado.informe());
+            imprimirConclusionElectoral(resultado);
+        } catch (SQLException e) {
+            mostrarError(e);
+        }
+    }
+
+    private void imprimirInformeElectoral(ResultadoElectoralService.InformeElectoral informe) {
+        imprimirResultadosPartidos("RESULTADO NACIONAL", informe.nacional().votosValidos(),
+                informe.nacional().partidos());
+        for (ResultadoElectoralService.ResultadoDepartamento departamento : informe.departamentos()) {
+            imprimirResultadosPartidos("DEPARTAMENTO: " + departamento.departamento(),
+                    departamento.votosValidos(),
+                    departamento.partidos());
+        }
+    }
+
+    private void imprimirConclusionElectoral(ResultadoFinalService.ResultadoFinal resultado) {
+        System.out.println();
+        System.out.println("=== CONCLUSIÓN ELECTORAL (LEY 026) ===");
+        switch (resultado.estado()) {
+            case SIN_VOTOS_VALIDOS ->
+                    System.out.println("No hay votos válidos computados; todavía no se puede determinar el resultado.");
+            case GANADOR_PRIMERA_VUELTA -> {
+                ResultadoElectoralService.FilaPartido ganador = resultado.ganador()
+                        .orElseThrow(() -> new IllegalStateException("El resultado no incluye al ganador."));
+                System.out.printf("Ganador en primera vuelta: %s (%s), %d votos (%.2f%%).%n",
+                        ganador.candidato(), ganador.sigla(), ganador.votos(), ganador.porcentajeSobreValidos());
+                switch (resultado.criterioPrimeraVuelta().orElseThrow(
+                        () -> new IllegalStateException("El resultado no incluye el criterio aplicado."))) {
+                    case MAS_DEL_50_POR_CIENTO ->
+                            System.out.println("Cumple el requisito de obtener más del 50% de los votos válidos.");
+                    case AL_MENOS_40_Y_10_PUNTOS_DE_VENTAJA ->
+                            System.out.println("Cumple el requisito de obtener al menos 40% y aventajar por "
+                                    + "10 puntos porcentuales o más al segundo.");
+                }
+            }
+            case SEGUNDA_VUELTA -> {
+                List<ResultadoElectoralService.FilaPartido> candidatos =
+                        resultado.candidatosSegundaVuelta();
+                ResultadoElectoralService.FilaPartido primero = candidatos.get(0);
+                ResultadoElectoralService.FilaPartido segundo = candidatos.get(1);
+                System.out.println("No se alcanzó un criterio para ganar en primera vuelta.");
+                System.out.println("Corresponde una segunda vuelta entre:");
+                imprimirCandidatoSegundaVuelta(primero);
+                imprimirCandidatoSegundaVuelta(segundo);
+            }
+            case EMPATE_POR_SEGUNDO_LUGAR -> {
+                System.out.println("No se alcanzó un criterio para ganar en primera vuelta y hay empate "
+                        + "por el segundo lugar.");
+                System.out.println("No se puede definir todavía la segunda vuelta; candidatos empatados:");
+                for (ResultadoElectoralService.FilaPartido candidato : resultado.candidatosSegundaVuelta()) {
+                    imprimirCandidatoSegundaVuelta(candidato);
+                }
+            }
+            case INDETERMINADO ->
+                    System.out.println("No hay candidaturas suficientes para determinar un ganador o "
+                            + "una segunda vuelta.");
+        }
+    }
+
+    private void imprimirCandidatoSegundaVuelta(ResultadoElectoralService.FilaPartido candidato) {
+        System.out.printf("  %s (%s): %d votos (%.2f%%).%n",
+                candidato.candidato(), candidato.sigla(), candidato.votos(),
+                candidato.porcentajeSobreValidos());
+    }
+
+    private void cerrarMesa() {
+        System.out.println();
+        System.out.println("--- Cierre de mesas e inicio del escrutinio oficial ---");
+        try {
+            System.out.println("1. Cerrar una mesa");
+            System.out.println("2. Cerrar todas las mesas habilitadas");
+            System.out.println("3. Habilitar todas las mesas para ingreso de votaciones (demo)");
+            System.out.println("0. Volver");
+            int opcion = leerEntero("Opción: ");
+            if (opcion == 0) {
+                return;
+            }
+            if (opcion == 2) {
+                cerrarTodasLasMesas();
+                return;
+            }
+            if (opcion == 3) {
+                habilitarTodasLasMesas();
+                return;
+            }
+            if (opcion != 1) {
+                System.out.println("Opción no válida.");
+                return;
+            }
+
+            List<Mesa> mesas = mesaDAO.findAll();
+            System.out.println("Mesas habilitadas:");
+            boolean hayMesasHabilitadas = false;
+            for (Mesa mesa : mesas) {
+                if (Mesa.ESTADO_HABILITADA.equals(mesa.getEstado())) {
+                    System.out.println("  ID " + mesa.getIdMesa() + " | mesa " + mesa.getNumeroMesa());
+                    hayMesasHabilitadas = true;
+                }
+            }
+            if (!hayMesasHabilitadas) {
+                System.out.println("No hay mesas habilitadas para cerrar.");
+                return;
+            }
+
+            int idMesa = leerEntero("ID de la mesa a cerrar: ");
+            CierreMesaService.ResumenCierre resumen = cierreMesaService.cerrarMesa(idMesa);
+            System.out.println("Mesa " + resumen.numeroMesa() + " cerrada y marcada como COMPUTADA.");
+            System.out.println("Votos válidos: " + resumen.votosValidos()
+                    + " | Blancos: " + resumen.votosBlancos()
+                    + " | Nulos: " + resumen.votosNulos()
+                    + " | Total: " + resumen.totalVotos());
+            System.out.println("El acta y el detalle por partido quedaron registrados.");
+        } catch (VotacionException e) {
+            System.out.println(e.getMessage());
+        } catch (SQLException e) {
+            mostrarError(e);
+        }
+    }
+
+    private void cerrarTodasLasMesas() throws SQLException {
+        String confirmacion = leerTexto(
+                "¿Confirma cerrar todas las mesas habilitadas que tengan papeletas? (S/N): ");
+        if (!"S".equalsIgnoreCase(confirmacion.trim())) {
+            System.out.println("Cierre cancelado.");
+            return;
+        }
+
+        CierreMesaService.ResultadoCierreMasivo resultado = cierreMesaService.cerrarTodasMesas();
+        System.out.println("Mesas cerradas: " + resultado.cerradas().size());
+        for (CierreMesaService.ResumenCierre resumen : resultado.cerradas()) {
+            System.out.println("  Mesa " + resumen.numeroMesa()
+                    + " | válidos " + resumen.votosValidos()
+                    + " | blancos " + resumen.votosBlancos()
+                    + " | nulos " + resumen.votosNulos()
+                    + " | total " + resumen.totalVotos());
+        }
+        if (!resultado.noCerradas().isEmpty()) {
+            System.out.println("Mesas habilitadas que no se cerraron:");
+            for (String detalle : resultado.noCerradas()) {
+                System.out.println("  " + detalle);
+            }
+        }
+    }
+
+    private void habilitarTodasLasMesas() throws SQLException {
+        String confirmacion = leerTexto(
+                "¿Confirma habilitar todas las mesas para el ingreso de votaciones? (S/N): ");
+        if (!"S".equalsIgnoreCase(confirmacion.trim())) {
+            System.out.println("Habilitación cancelada.");
+            return;
+        }
+
+        int habilitadas = 0;
+        for (Mesa mesa : mesaDAO.findAll()) {
+            if (!Mesa.ESTADO_HABILITADA.equals(mesa.getEstado())) {
+                mesa.setEstado(Mesa.ESTADO_HABILITADA);
+                if (mesaDAO.update(mesa)) {
+                    habilitadas++;
+                }
+            } else {
+                habilitadas++;
+            }
+        }
+
+        System.out.println("Mesas habilitadas: " + habilitadas);
+        System.out.println("Las mesas quedaron listas para el ingreso de votaciones.");
+    }
+
+    private void imprimirResultadosPartidos(
+            String titulo,
+            long votosValidos,
+            List<ResultadoElectoralService.FilaPartido> partidos
+    ) {
+        System.out.println();
+            System.out.println("=".repeat(95));
+        System.out.println(titulo);
+        System.out.println("Votos válidos: " + votosValidos);
+        if (votosValidos == 0) {
+            System.out.println("Sin votos válidos registrados.");
+            return;
+        }
+
+        System.out.printf("%-4s %-8s %-28s %-28s %12s %10s%n",
+                "#", "Sigla", "Partido", "Candidato", "Votos", "% válidos");
+            System.out.println("-".repeat(95));
+        int posicion = 1;
+        for (ResultadoElectoralService.FilaPartido partido : partidos) {
+                System.out.printf("%-4d %-8s %-28s %-28s %12d %10.2f%%%n",
+                    posicion++,
+                    partido.sigla(),
+                    partido.nombreCompleto(),
+                    partido.candidato(),
+                    partido.votos(),
+                    partido.porcentajeSobreValidos());
         }
     }
 
