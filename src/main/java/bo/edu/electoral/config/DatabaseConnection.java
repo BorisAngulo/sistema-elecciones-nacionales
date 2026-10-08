@@ -46,7 +46,7 @@ public class DatabaseConnection {
             if (url == null || url.isBlank()) {
                 String host = valor(env, "DB_HOST", "localhost");
                 String port = valor(env, "DB_PORT", "3306");
-                String name = valor(env, "DB_NAME", "elecciones_nacionales");
+                String name = valor(env, "DB_NAME", "elecciones_controladas");
                 url = "jdbc:mysql://" + host + ":" + port + "/" + name + "?characterEncoding=UTF-8&connectionTimeZone=LOCAL&sslMode=PREFERRED&allowPublicKeyRetrieval=true";
             }
 

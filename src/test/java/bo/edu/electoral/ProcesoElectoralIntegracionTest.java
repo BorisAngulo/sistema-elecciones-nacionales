@@ -44,6 +44,102 @@ class ProcesoElectoralIntegracionTest {
                 """);
         }
         proceso = new ProcesoElectoralService(this::conexion);
+        proceso.abrirVotaciones();
+    }
+    private void volverAPreparacion() throws SQLException {
+        try(Connection c=conexion(); Statement s=c.createStatement()) {
+            s.executeUpdate("UPDATE jornada_electoral SET estado='PREPARACION',fecha_apertura=NULL WHERE id=1");
+        }
+    }
+    @Test void votacionEmpiezaBloqueadaHastaAbrir() throws Exception {
+        volverAPreparacion();
+        assertEquals("PREPARACION",proceso.estado());
+        assertThrows(IllegalArgumentException.class,()->proceso.marcarAsistencia("CI1"));
+        assertThrows(IllegalArgumentException.class,()->proceso.registrarPapeleta(1,"NULO",null));
+        assertThrows(IllegalArgumentException.class,()->proceso.cerrarVotaciones());
+        proceso.abrirVotaciones(); proceso.marcarAsistencia("CI1");
+        assertEquals("ABIERTA",new ProcesoElectoralService(this::conexion).estado());
+        assertThrows(IllegalArgumentException.class,()->proceso.abrirVotaciones());
+    }
+    @Test void duplicadosYPadronActualizado() throws Exception {
+        volverAPreparacion();
+        proceso.crearCiudadano(" nuevo ","Ana","Prueba",1);
+        var e=assertThrows(IllegalArgumentException.class,()->proceso.crearCiudadano("NUEVO","Otra","Persona",1));
+        assertTrue(e.getMessage().contains("ya está registrado"));
+        assertEquals(4,contar("SELECT cantidad_inscritos FROM mesa WHERE id_mesa=1"));
+        int id=proceso.crearPartido(" c ","Partido C","Candidatura C");
+        assertTrue(id>0);
+        assertThrows(IllegalArgumentException.class,()->proceso.crearPartido("C","Otro","Otro"));
+        assertThrows(IllegalArgumentException.class,()->proceso.crearCiudadano("","Ana","Prueba",1));
+        assertThrows(IllegalArgumentException.class,()->proceso.crearCiudadano("XYZ","Ana","Prueba",999));
+        assertEquals(4,contar("SELECT COUNT(*) FROM padron_ciudadano"));
+    }
+    @Test void aperturaBloqueaNuevosRegistros() throws Exception {
+        assertThrows(IllegalArgumentException.class,()->proceso.crearCiudadano("NEW","Ana","Prueba",1));
+        assertThrows(IllegalArgumentException.class,()->proceso.crearPartido("NEW","Nuevo","Nuevo"));
+    }
+    @Test void cierreGlobalPublicaActasYBloqueaTodo() throws Exception {
+        proceso.marcarAsistencia("CI1"); proceso.registrarPapeleta(1,"VALIDO",1);
+        assertEquals(2,proceso.cerrarVotaciones());
+        assertEquals("CERRADA",new ProcesoElectoralService(this::conexion).estado());
+        assertEquals(2,contar("SELECT COUNT(*) FROM acta"));
+        assertThrows(IllegalArgumentException.class,()->proceso.marcarAsistencia("CI2"));
+        assertThrows(IllegalArgumentException.class,()->proceso.registrarPapeleta(1,"NULO",null));
+        assertThrows(IllegalArgumentException.class,()->proceso.abrirVotaciones());
+        assertThrows(IllegalArgumentException.class,()->proceso.cerrarVotaciones());
+        try(Connection c=conexion()) { assertTrue(new ReporteElectoralDAO().nacional(c).completo()); }
+    }
+    @Test void cierreGlobalEsAtomicoCuandoFaltaUnaPapeleta() throws Exception {
+        try(Connection c=conexion();Statement s=c.createStatement()) {
+            s.executeUpdate("UPDATE padron_ciudadano SET id_mesa=2 WHERE ci='CI3'");
+            s.executeUpdate("UPDATE mesa SET cantidad_inscritos=3");
+        }
+        proceso.marcarAsistencia("CI1"); proceso.registrarPapeleta(1,"BLANCO",null);
+        proceso.marcarAsistencia("CI3");
+        assertThrows(IllegalArgumentException.class,()->proceso.cerrarVotaciones());
+        assertEquals("ABIERTA",proceso.estado());
+        assertEquals(0,contar("SELECT COUNT(*) FROM acta"));
+        assertEquals(0,contar("SELECT COUNT(*) FROM mesa WHERE estado='COMPUTADA'"));
+        proceso.registrarPapeleta(2,"NULO",null);
+        assertEquals(2,proceso.cerrarVotaciones());
+    }
+    @Test void aperturaExigePartidosYCiudadanos() throws Exception {
+        volverAPreparacion();
+        try(Connection c=conexion(); Statement s=c.createStatement()) {
+            s.executeUpdate("DELETE FROM partido_politico WHERE id_partido=2");
+        }
+        assertThrows(IllegalArgumentException.class,()->proceso.abrirVotaciones());
+        proceso.crearPartido("B","Partido B","Candidato B");
+        try(Connection c=conexion();Statement s=c.createStatement()) { s.executeUpdate("DELETE FROM padron_ciudadano"); }
+        assertThrows(IllegalArgumentException.class,()->proceso.abrirVotaciones());
+        assertEquals("PREPARACION",proceso.estado());
+    }
+    @Test void registroConcurrenteNoDuplicaCI() throws Exception {
+        volverAPreparacion();
+        try(ExecutorService pool=Executors.newFixedThreadPool(2)) {
+            CountDownLatch inicio=new CountDownLatch(1);
+            Callable<Boolean> crear=()->{ inicio.await(); try {proceso.crearCiudadano("CI4","Ana","Prueba",1);return true;}catch(IllegalArgumentException e){return false;} };
+            var a=pool.submit(crear);var b=pool.submit(crear);inicio.countDown();
+            assertNotEquals(a.get(10,TimeUnit.SECONDS),b.get(10,TimeUnit.SECONDS));
+        }
+        assertEquals(1,contar("SELECT COUNT(*) FROM padron_ciudadano WHERE ci='CI4'"));
+    }
+    @Test void instaladorVacioYRepetibleSinReiniciarJornada() throws Exception {
+        volverAPreparacion();
+        String script=Files.readString(Path.of("INSTALAR_SISTEMA_MYSQL.sql")).replace("elecciones_controladas",esquema);
+        try(Connection c=conexion()) { vaciarFixture(c); ejecutarScript(c,script); }
+        assertEquals("PREPARACION",proceso.estado());
+        assertEquals(0,contar("SELECT COUNT(*) FROM padron_ciudadano"));
+        assertEquals(0,contar("SELECT COUNT(*) FROM partido_politico"));
+        assertEquals(1,contar("SELECT COUNT(*) FROM mesa"));
+        proceso.crearPartido("A","Partido A","Persona A");
+        proceso.crearPartido("B","Partido B","Persona B");
+        proceso.crearCiudadano("CI1","Ana","Prueba",1);
+        proceso.abrirVotaciones();
+        try(Connection c=conexion()) { ejecutarScript(c,script); }
+        assertEquals("ABIERTA",proceso.estado());
+        assertEquals(1,contar("SELECT COUNT(*) FROM padron_ciudadano"));
+        assertEquals(2,contar("SELECT COUNT(*) FROM partido_politico"));
     }
     @AfterEach void limpiar() throws SQLException {
         if (esquema != null && esquema.matches("prueba_[a-f0-9]{32}"))

@@ -1,6 +1,9 @@
+-- Ejecutar TODO este archivo en MySQL Workbench. Conserva las bases anteriores.
+CREATE DATABASE IF NOT EXISTS elecciones_controladas CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs;
+USE elecciones_controladas;
 -- Selecciona primero tu base de datos en Workbench. No borra tablas existentes.
 -- Sistema Electoral Nacional - Esquema MySQL 8.0.16 o superior
--- Para la instalación completa use INSTALAR_SISTEMA_MYSQL.sql (ver LEEME_PRIMERO.md).
+-- Base de esta versión: elecciones_controladas (ver LEEME_PRIMERO.md).
 
 -- 1. TABLA: Departamentos de Bolivia
 CREATE TABLE IF NOT EXISTS departamento (
@@ -115,3 +118,14 @@ CREATE TABLE IF NOT EXISTS jornada_electoral (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 INSERT INTO jornada_electoral(id,estado)
 SELECT 1,'PREPARACION' WHERE NOT EXISTS(SELECT 1 FROM jornada_electoral WHERE id=1);
+
+-- Solo crea la ubicación inicial. No carga personas, partidos ni votos.
+INSERT INTO departamento(id_departamento,nombre)
+SELECT 1,'Departamento de práctica' WHERE NOT EXISTS(SELECT 1 FROM departamento WHERE id_departamento=1);
+INSERT INTO municipio(id_municipio,nombre,id_departamento)
+SELECT 1,'Municipio de práctica',1 WHERE NOT EXISTS(SELECT 1 FROM municipio WHERE id_municipio=1);
+INSERT INTO recinto(id_recinto,nombre,id_municipio)
+SELECT 1,'Recinto de práctica',1 WHERE NOT EXISTS(SELECT 1 FROM recinto WHERE id_recinto=1);
+INSERT INTO mesa(id_mesa,numero_mesa,id_recinto,cantidad_inscritos)
+SELECT 1,1,1,0 WHERE NOT EXISTS(SELECT 1 FROM mesa WHERE id_mesa=1);
+SELECT estado FROM jornada_electoral WHERE id=1;
