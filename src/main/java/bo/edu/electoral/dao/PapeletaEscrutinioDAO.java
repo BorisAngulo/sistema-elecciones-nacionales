@@ -76,6 +76,21 @@ public class PapeletaEscrutinioDAO {
         return lista;
     }
 
+    // Método para obtener la siguiente orden de extracción de la papeleta
+    public int siguienteOrden(int idMesa) throws SQLException {
+        String sql = "SELECT COALESCE(MAX(orden_extraccion), 0) + 1 FROM papeleta_escrutinio WHERE id_mesa = ?";
+        Connection cn = DatabaseConnection.getConnection();
+        try (PreparedStatement ps = cn.prepareStatement(sql)) {
+            ps.setInt(1, idMesa);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1);
+                }
+            }
+        }
+        return 1;
+    }
+
     public boolean delete(int id) throws SQLException {
         String sql = "DELETE FROM papeleta_escrutinio WHERE id_papeleta = ?";
         Connection cn = DatabaseConnection.getConnection();

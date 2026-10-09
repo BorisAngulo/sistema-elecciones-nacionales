@@ -19,6 +19,9 @@ import bo.edu.electoral.model.PadronCiudadano;
 import bo.edu.electoral.model.PapeletaEscrutinio;
 import bo.edu.electoral.model.PartidoPolitico;
 import bo.edu.electoral.model.Recinto;
+import bo.edu.electoral.service.ResultadoSimulacionService;
+import bo.edu.electoral.service.SimuladorVotacionService;
+import bo.edu.electoral.service.VotacionException;
 
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
@@ -43,6 +46,8 @@ public class MainConsola {
     private final DetalleVotoDAO detalleVotoDAO = new DetalleVotoDAO();
     private final PadronCiudadanoDAO padronDAO = new PadronCiudadanoDAO();
     private final PapeletaEscrutinioDAO papeletaDAO = new PapeletaEscrutinioDAO();
+    private final SimuladorVotacionService votacionService = new SimuladorVotacionService();
+    private final ResultadoSimulacionService resultadoService = new ResultadoSimulacionService();
 
     public static void main(String[] args) {
         try {
@@ -70,6 +75,9 @@ public class MainConsola {
             System.out.println("7. Papeletas de escrutinio");
             System.out.println("8. Actas");
             System.out.println("9. Detalle de votos");
+            System.out.println("=======================================================");
+            System.out.println("10. Simular votación");
+            System.out.println("11. Resultados totales");
             System.out.println("0. Salir");
             int opcion = leerEntero("Opción: ");
             switch (opcion) {
@@ -82,6 +90,8 @@ public class MainConsola {
                 case 7 -> menuPapeletas();
                 case 8 -> menuActas();
                 case 9 -> menuDetalles();
+                case 10 -> simularVotacion();
+                case 11 -> mostrarResultadosTotales();
                 case 0 -> continuar = false;
                 default -> System.out.println("Opción no válida.");
             }
@@ -564,6 +574,85 @@ public class MainConsola {
             } catch (SQLException e) {
                 mostrarError(e);
             }
+        }
+    }
+
+    private void simularVotacion() {
+        System.out.println();
+        System.out.println("--- Simular votación ---");
+        try {
+            String ci = leerTexto("CI del votante: ");
+            PadronCiudadano ciudadano = votacionService.validarCi(ci);
+            System.out.println("Votante válido: " + ciudadano.getNombreCompleto()
+                    + " | mesa " + ciudadano.getIdMesa());
+
+            List<PartidoPolitico> partidos = votacionService.listarPartidos();
+            if (partidos.isEmpty()) {
+                System.out.println("No hay partidos registrados. Cargue partidos antes de votar.");
+                return;
+            }
+            System.out.println("Partidos:");
+            for (PartidoPolitico partido : partidos) {
+                System.out.println("  " + partido.getIdPartido() + " | " + partido.getSigla()
+                        + " | " + partido.getCandidatoPresidente());
+            }
+            System.out.println("  B | voto BLANCO");
+            System.out.println("  N | voto NULO");
+
+            String eleccion = leerTexto("Elija ID de partido, B o N: ");
+            String tipoVoto;
+            Integer idPartido = null;
+            if (eleccion.equalsIgnoreCase("B") || eleccion.equalsIgnoreCase("BLANCO")) {
+                tipoVoto = PapeletaEscrutinio.TIPO_BLANCO;
+            } else if (eleccion.equalsIgnoreCase("N") || eleccion.equalsIgnoreCase("NULO")) {
+                tipoVoto = PapeletaEscrutinio.TIPO_NULO;
+            } else {
+                try {
+                    idPartido = Integer.parseInt(eleccion);
+                    tipoVoto = PapeletaEscrutinio.TIPO_VALIDO;
+                } catch (NumberFormatException e) {
+                    System.out.println("Opción no válida.");
+                    return;
+                }
+            }
+
+            PapeletaEscrutinio papeleta = votacionService.registrarVoto(ci, tipoVoto, idPartido);
+            System.out.println("Voto registrado. Papeleta #" + papeleta.getOrdenExtraccion()
+                    + " en mesa " + papeleta.getIdMesa() + " (" + papeleta.getTipoVoto() + ").");
+            System.out.println("El CI no se guardó en la papeleta (voto secreto).");
+        } catch (VotacionException e) {
+            System.out.println(e.getMessage());
+        } catch (SQLException e) {
+            mostrarError(e);
+        }
+    }
+
+    private void mostrarResultadosTotales() {
+        System.out.println();
+        System.out.println("--- Resultados totales ---");
+        try {
+            ResultadoSimulacionService.ComputoTotal computo = resultadoService.computar();
+            if (computo.totalPapeletas() == 0) {
+                System.out.println("Aún no hay votos registrados.");
+                return;
+            }
+            System.out.printf("%-8s %-28s %8s %10s%n", "Sigla", "Candidato", "Votos", "% válidos");
+            for (ResultadoSimulacionService.FilaResultado fila : computo.partidos()) {
+                System.out.printf("%-8s %-28s %8d %9.2f%%%n",
+                        fila.sigla(),
+                        fila.candidato(),
+                        fila.votos(),
+                        fila.porcentajeSobreValidos());
+            }
+            System.out.println("--------------------------------------------------------------");
+            System.out.println("Válidos: " + computo.votosValidos()
+                    + " | Blancos: " + computo.votosBlancos()
+                    + " | Nulos: " + computo.votosNulos()
+                    + " | Total: " + computo.totalPapeletas());
+            GraficoBarrasVentana.mostrar(computo);
+            System.out.println("Se abrió la ventana del gráfico de barras.");
+        } catch (SQLException e) {
+            mostrarError(e);
         }
     }
 

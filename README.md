@@ -9,7 +9,8 @@ Proyecto de apoyo para Programación II. Incluye el **modelo de datos**, el **es
 | Modelos (POJO con getters/setters) | `src/main/java/bo/edu/electoral/model/` | Representan las 9 tablas. |
 | Conexión singleton JDBC | `src/main/java/bo/edu/electoral/config/DatabaseConnection.java` | Abre una conexión a PostgreSQL leyendo `.env`. |
 | DAOs (insert, update, findById, findAll, delete) | `src/main/java/bo/edu/electoral/dao/` | Persistencia con SQL y `PreparedStatement`. |
-| Menú de consola | `src/main/java/bo/edu/electoral/ui/MainConsola.java` | Alta, baja, consulta y edición al ejecutar `main`. |
+| Menú de consola | `src/main/java/bo/edu/electoral/ui/MainConsola.java` | Alta, baja, consulta, edición y simulación de voto. |
+| Simulación de votación | `src/main/java/bo/edu/electoral/service/SimuladorVotacionService.java` | Valida CI, registra papeleta (sin CI) y marca `ha_votado`. |
 | Esquema de base de datos | `src/main/resources/schema.sql` | Crea las tablas en PostgreSQL. |
 | Variables de entorno de ejemplo | `.env.example` | Plantilla de credenciales. Se copia a `.env`. |
 
@@ -88,7 +89,7 @@ Por terminal, desde la raíz:
 mvn compile exec:java
 ```
 
-Si conecta bien verás `Conectado a PostgreSQL.` y el menú. Ahí puedes listar, buscar, crear, editar y eliminar en las 9 tablas.
+Si conecta bien verás `Conectado a PostgreSQL.` y el menú. Ahí puedes listar, buscar, crear, editar y eliminar en las 9 tablas. La opción **10. Simular votación** pide un CI, lo valida y registra el voto. La opción **11. Resultados totales** cuenta las papeletas (sin cerrar actas) y abre un gráfico de barras.
 
 El orden de carga por claves foráneas es: departamento → municipio → recinto → mesa → padrón / partidos → actas, detalles y papeletas.
 
@@ -137,9 +138,10 @@ src/main/java/bo/edu/electoral/
 ├── model/                               ← listo
 ├── dao/                                 ← listo (CRUD por tabla)
 │   └── ReporteElectoralDAO.java         ← FALTA (totales GROUP BY)
-├── service/                             ← FALTA
-│   ├── ValidadorActaService.java
-│   └── MotorElectoralLey026.java
+├── service/
+│   ├── SimuladorVotacionService.java    ← listo
+│   ├── ValidadorActaService.java        ← FALTA
+│   └── MotorElectoralLey026.java        ← FALTA
 ├── stats/                               ← FALTA
 │   ├── DistribucionFrecuencia.java
 │   ├── MedidasPosicion.java
